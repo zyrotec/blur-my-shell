@@ -21,6 +21,12 @@ export const Other = GObject.registerClass({
         'coverflow_alt_tab_blur',
         'coverflow_alt_tab_pipeline_choose_row',
 
+        'popup_menu_blur',
+        'popup_menu_mode_static',
+        'popup_menu_mode_dynamic',
+        'popup_menu_pipeline_choose_row',
+        'popup_menu_corner_radius_row',
+
         'hack_level',
         'debug',
         'reset'
@@ -72,6 +78,32 @@ export const Other = GObject.registerClass({
             this.preferences.coverflow_alt_tab, this.pipelines_manager, this.pipelines_page
         );
 
+        this.preferences.popup_menu.settings.bind(
+            'blur', this._popup_menu_blur, 'active',
+            Gio.SettingsBindFlags.DEFAULT
+        );
+
+        this._popup_menu_mode_static.connect('toggled',
+            () => this.preferences.popup_menu.STATIC_BLUR = this._popup_menu_mode_static.active
+        );
+
+        this.preferences.popup_menu.STATIC_BLUR_changed(
+            () => this.change_blur_mode(this.preferences.popup_menu.STATIC_BLUR, false)
+        );
+
+        this._popup_menu_pipeline_choose_row.initialize(
+            this.preferences.popup_menu,
+            this.pipelines_manager,
+            this.pipelines_page
+        );
+
+        this.preferences.popup_menu.settings.bind(
+            'corner-radius',
+            this._popup_menu_corner_radius_row,
+            'value',
+            Gio.SettingsBindFlags.DEFAULT
+        );
+
         this.preferences.settings.bind(
             'hacks-level', this._hack_level, 'selected',
             Gio.SettingsBindFlags.DEFAULT
@@ -82,5 +114,10 @@ export const Other = GObject.registerClass({
         );
 
         this._reset.connect('clicked', () => this.preferences.reset());
+    }
+
+    change_blur_mode(is_static_blur, first_run) {
+        this._popup_menu_mode_static.active = is_static_blur;
+        this._popup_menu_mode_dynamic.active = !is_static_blur;
     }
 });

@@ -106,6 +106,14 @@ export const KEYS = [
             { type: Type.B, name: "blur-original-panel" },
         ]
     },
+    {
+        component: "popup-menu", schemas: [
+            { type: Type.B, name: "blur" },
+            { type: Type.B, name: "static-blur" },
+            { type: Type.S, name: "pipeline" },
+            { type: Type.I, name: "corner-radius" },
+        ]
+    }
 ];
 
 
