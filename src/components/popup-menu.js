@@ -1,4 +1,5 @@
 import Meta from "gi://Meta";
+import GLib from "gi://GLib";
 import * as Main from "resource:///org/gnome/shell/ui/main.js";
 import * as BoxPointer from "resource:///org/gnome/shell/ui/boxpointer.js";
 
@@ -149,17 +150,29 @@ export const PopupMenuBlur = class PopupMenuBlur {
 
             this.paint_signals.connect(blur_widget, pipeline.effect);
 
+            // Start hidden + 1x1 so cogl never sees a 0-sized texture.
+            blur_widget.visible = false;
+            blur_widget.set_size(1, 1);
+
             this.connections.connect(actor, "notify::allocation", () => {
                 if (!actor.get_stage?.() || !actor.has_allocation?.()) return;
-                blur_widget.set_size(actor.width, actor.height);
+                const w = actor.width | 0, h = actor.height | 0;
+                if (w >= 1 && h >= 1) {
+                    blur_widget.set_size(w, h);
+                    if (actor.visible) blur_widget.visible = true;
+                }
             });
 
             data = { blur_widget, bg_manager, pipeline };
             this._tracked.set(actor, data);
         }
 
-        data.blur_widget.visible = true;
-        data.blur_widget.set_size(actor.width, actor.height);
+        // Only size + show when the actor is actually allocated;
+        // otherwise the notify::allocation handler will pick it up.
+        if (actor.has_allocation?.() && actor.width >= 1 && actor.height >= 1) {
+            data.blur_widget.set_size(actor.width, actor.height);
+            data.blur_widget.visible = true;
+        }
 
         const opacity = this._opacity;
         if (actor.bin) {
@@ -224,6 +237,7 @@ export const PopupMenuBlur = class PopupMenuBlur {
         const update = () => {
             if (!window_actor.get_stage?.()) return;
             const rect = meta_window.get_frame_rect();
+            if (rect.width < 1 || rect.height < 1) return;
             background_group.set_position(rect.x, rect.y);
             background_group.set_size(rect.width, rect.height);
             blur_widget.set_size(rect.width, rect.height);
@@ -232,9 +246,9 @@ export const PopupMenuBlur = class PopupMenuBlur {
         const alloc_id = window_actor.connect("notify::allocation", update);
         const stage_id = global.stage.connect("before-update", update);
 
-        imports.gi.GLib.timeout_add(imports.gi.GLib.PRIORITY_DEFAULT, 16, () => {
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 16, () => {
             update();
-            return false;
+            return GLib.SOURCE_REMOVE;
         });
 
         window_actor.opacity = this._opacity;
