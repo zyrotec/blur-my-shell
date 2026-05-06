@@ -1,5 +1,6 @@
 import Meta from "gi://Meta";
 import GLib from "gi://GLib";
+import Clutter from "gi://Clutter";
 import * as Main from "resource:///org/gnome/shell/ui/main.js";
 import * as BoxPointer from "resource:///org/gnome/shell/ui/boxpointer.js";
 
@@ -156,10 +157,29 @@ export const PopupMenuBlur = class PopupMenuBlur {
 
             this.connections.connect(actor, "notify::allocation", () => {
                 if (!actor.get_stage?.() || !actor.has_allocation?.()) return;
-                const w = actor.width | 0, h = actor.height | 0;
-                if (w >= 1 && h >= 1) {
-                    blur_widget.set_size(w, h);
-                    if (actor.visible) blur_widget.visible = true;
+                const pbox = actor.get_allocation_box();
+                const w = (pbox.x2 - pbox.x1) | 0;
+                const h = (pbox.y2 - pbox.y1) | 0;
+                if (w < 1 || h < 1) return;
+
+                blur_widget.set_size(w, h);
+                if (actor.visible) blur_widget.visible = true;
+
+                // BoxPointer.vfunc_allocate only allocates this._border and
+                // this.bin — arbitrary inserted children stay
+                // priv->needs_allocation=TRUE, which makes Cogl's
+                // offscreen-effect FBO fall back to allocation_box=0x0 and
+                // trip the cogl_texture_2d_new_with_size 'width >= 1'
+                // assertion. We call allocate() ourselves to fill that gap.
+                // ORDER MATTERS: clutter_actor_allocate() bails early when
+                // the actor isn't mapped, so visibility must be set first.
+                if (blur_widget.mapped) {
+                    const cbox = new Clutter.ActorBox();
+                    cbox.x1 = 0;
+                    cbox.y1 = 0;
+                    cbox.x2 = w;
+                    cbox.y2 = h;
+                    blur_widget.allocate(cbox);
                 }
             });
 
@@ -167,11 +187,22 @@ export const PopupMenuBlur = class PopupMenuBlur {
             this._tracked.set(actor, data);
         }
 
-        // Only size + show when the actor is actually allocated;
-        // otherwise the notify::allocation handler will pick it up.
-        if (actor.has_allocation?.() && actor.width >= 1 && actor.height >= 1) {
-            data.blur_widget.set_size(actor.width, actor.height);
-            data.blur_widget.visible = true;
+        // First-call fast path when the parent already has an allocation;
+        // notify::allocation will pick it up otherwise.
+        if (actor.has_allocation?.()) {
+            const pbox = actor.get_allocation_box();
+            const w = (pbox.x2 - pbox.x1) | 0;
+            const h = (pbox.y2 - pbox.y1) | 0;
+            if (w >= 1 && h >= 1) {
+                data.blur_widget.set_size(w, h);
+                data.blur_widget.visible = true;
+                if (data.blur_widget.mapped) {
+                    const cbox = new Clutter.ActorBox();
+                    cbox.x1 = 0; cbox.y1 = 0;
+                    cbox.x2 = w; cbox.y2 = h;
+                    data.blur_widget.allocate(cbox);
+                }
+            }
         }
 
         const opacity = this._opacity;
