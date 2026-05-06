@@ -639,7 +639,7 @@ export default class BlurMyShell extends Extension {
         });
 
         // ---------- POPUP MENU ----------
-        
+
         // toggled on/off
         this._settings.popup_menu.BLUR_changed(() => {
             if (this._settings.popup_menu.BLUR)
@@ -647,6 +647,20 @@ export default class BlurMyShell extends Extension {
             else
                 this._popup_menu_blur.disable();
         });
+
+        // sigma/brightness are handled reactively by DummyPipeline's
+        // gsettings connections, no action needed here
+
+        // opacity/blur-app-menus/corner-radius require full restart
+        const popup_restart = () => {
+            if (this._settings.popup_menu.BLUR) {
+                this._popup_menu_blur.disable();
+                this._popup_menu_blur.enable();
+            }
+        };
+        this._settings.popup_menu.OPACITY_changed(popup_restart);
+        this._settings.popup_menu.BLUR_APP_MENUS_changed(popup_restart);
+        this._settings.popup_menu.CORNER_RADIUS_changed(popup_restart);
     }
 
     _log(str) {
